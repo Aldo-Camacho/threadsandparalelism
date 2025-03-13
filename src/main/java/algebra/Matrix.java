@@ -24,6 +24,14 @@ public class Matrix {
         return rows * columns;
     }
 
+    public int getRows() {
+        return rows;
+    }
+
+    public int getColumns() {
+        return columns;
+    }
+
     public List<Double> getValues() {
         return values;
     }
@@ -134,11 +142,16 @@ public class Matrix {
     public static Matrix zeroes(int rows, int columns) {
         return new Matrix(rows, columns, new ArrayList<>(Collections.nCopies(rows * columns, 0.0)));
     }
+
     public static Matrix getRandom(int rows, int columns) {
+        return getRandom(rows, columns, 1);
+    }
+
+    public static Matrix getRandom(int rows, int columns, double scale) {
         Random rand = new Random();
         List<Double> values = IntStream.range(0, rows * columns)
                 .parallel()
-                .mapToDouble(i -> rand.nextDouble())
+                .mapToDouble(i -> scale * rand.nextDouble())
                 .boxed()
                 .collect(Collectors.toList());
 
@@ -157,6 +170,16 @@ public class Matrix {
                     .parallel()
                     .allMatch(i -> a.values.get(i).doubleValue() == b.values.get(i).doubleValue());
         }
+    }
+
+    public Matrix transpose() {
+        Matrix out = Matrix.zeroes(this.columns, this.rows);
+        for (int i = 0; i < this.rows; i++) {
+            for (int j = 0; j < this.columns; j++) {
+                out.setElement(j, i, this.getElement(i, j));
+            }
+        }
+        return out;
     }
 
     private static class RecursiveMatrixSum extends RecursiveAction {
@@ -227,5 +250,141 @@ public class Matrix {
                 }
             }
         }
+    }
+
+    public Matrix dot(Matrix b) {
+        return this.multiplyParallelChunked(b, Runtime.getRuntime().availableProcessors());
+    }
+
+    public Matrix add(Matrix b) {
+        return addBasic(b);
+    }
+
+    public Matrix add(double c) {
+        Matrix b = new Matrix(this.rows, this.columns);
+        for(int i = 0; i < getSize(); i++) {
+            b.values.add(i, this.values.get(i) + c);
+        }
+        return b;
+    }
+
+    public Matrix multiply(double c) {
+        Matrix b = new Matrix(this.rows, this.columns);
+        for(int i = 0; i < getSize(); i++) {
+            b.values.add(i, this.values.get(i) * c);
+        }
+        return b;
+    }
+
+    public double sum() {
+        double out = 0;
+        for (double element: this.getValues()) {
+            out += element;
+        }
+        return out;
+    }
+
+    public Matrix sumCols() {
+        Matrix out = Matrix.zeroes(1, this.columns);
+        for (int i = 0; i < this.columns; i++) {
+            double val = out.getElement(0, i);
+            for (int j = 0; j < this.rows; j++) {
+                 val += this.getElement(j, i);
+            }
+            out.setElement(0, i, val);
+        }
+        return out;
+    }
+
+    public Matrix sumRows() {
+        Matrix out = Matrix.zeroes(this.rows, 1);
+        for (int i = 0; i < this.rows; i++) {
+            double val = out.getElement(i, 0);
+            for (int j = 0; j < this.columns; j++) {
+                val += this.getElement(i, j);
+            }
+            out.setElement(i, 0, val);
+        }
+        return out;
+    }
+
+    public Matrix elementWiseMult(Matrix b){
+        assert this.columns == b.columns && this.rows == b.rows;
+        Matrix c = new Matrix(this.rows, b.columns);
+        for(int i = 0; i < getSize(); i++) {
+            c.values.add(i, this.values.get(i) * b.values.get(i));
+        }
+        return c;
+    }
+
+    public Matrix elementWiseDiv(Matrix b){
+        assert this.columns == b.columns && this.rows == b.rows;
+        Matrix c = new Matrix(this.rows, b.columns);
+        for(int i = 0; i < getSize(); i++) {
+            c.values.add(i, this.values.get(i) / b.values.get(i));
+        }
+        return c;
+    }
+
+    public Matrix elementWisePow(double c){
+        Matrix b = new Matrix(this.rows, this.columns);
+        for(int i = 0; i < getSize(); i++) {
+            b.values.add(i, Math.pow(this.values.get(i), c));
+        }
+        return b;
+    }
+
+    public Matrix elementWiseLog() {
+        Matrix b = new Matrix(this.rows, this.columns);
+        for(int i = 0; i < getSize(); i++) {
+            b.values.add(i, Math.log(this.values.get(i)));
+        }
+        return b;
+    }
+
+    public Matrix copyColumn(int c){
+        assert this.columns == 1;
+        Matrix b = Matrix.zeroes(this.rows, c);
+        for(int i = 0; i < this.rows; i++) {
+            for (int j = 0; j < c; j++) {
+                b.setElement(i, j, this.getElement(i, 0));
+            }
+        }
+        return b;
+    }
+
+
+    public double getMean() {
+        return this.sum() / this.getSize();
+    }
+
+    public double getStdDev() {
+        return this.getStdDev(this.getMean());
+    }
+
+    public double getStdDev(double mean) {
+        Matrix minusMean = this.add(- mean);
+        minusMean = minusMean.elementWisePow(2);
+        return Math.sqrt(minusMean.sum() / this.getSize());
+    }
+
+    public List<Matrix> asColumnList() {
+        List<Matrix> rows = new ArrayList<>();
+        for (int i = 0; i < this.columns; i++) {
+            Matrix matrix = Matrix.zeroes(this.rows, 1);
+            for (int j = 0; j < this.rows; j++) {
+                matrix.setElement(j, 0, this.getElement(j, i));
+            }
+            rows.add(matrix);
+        }
+        return rows;
+    }
+
+    public Matrix applyThreshold(double th) {
+        Matrix b = Matrix.zeroes(this.rows, this.columns);
+        for (int i = 0; i < this.getSize(); i++) {
+            b.values.set(i, this.values.get(i) > th ? 1.0 : 0.0);
+        }
+        return b;
     }
 }
